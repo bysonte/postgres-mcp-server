@@ -1,0 +1,63 @@
+{
+  "name": "postgres-mcp-server",
+  "version": "1.0.0",
+  "description": "Servidor MCP propio para PostgreSQL con lectura segura, escritura opcional e introspección parametrizada",
+  "license": "MIT",
+  "author": "gentleman-programming",
+  "homepage": "https://github.com/gentleman-programming/postgres-mcp-server",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gentleman-programming/postgres-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gentleman-programming/postgres-mcp-server/issues"
+  },
+  "type": "module",
+  "bin": {
+    "postgres-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/index.js",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "postgres",
+    "postgresql",
+    "database",
+    "llm",
+    "ai",
+    "claude",
+    "safe-sql",
+    "introspection",
+    "opencode",
+    "schema-explorer",
+    "database-manager",
+    "sql-executor"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "pg": "^8.16.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.15.5",
+    "@vitest/coverage-v8": "^3.2.4",
+    "shx": "^0.3.4",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
