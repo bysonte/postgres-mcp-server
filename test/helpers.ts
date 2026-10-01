@@ -30,11 +30,15 @@ export class FakeClient {
 }
 
 export class FakePool {
+  ended = false;
   constructor(readonly client: FakeClient = new FakeClient()) {}
 
   async connect(): Promise<FakeClient> {
     return this.client;
   }
+
+  on(): this { return this; }
+  async end(): Promise<void> { this.ended = true; }
 }
 
 export function asPool(pool: FakePool): pg.Pool {

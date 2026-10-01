@@ -1,44 +1,28 @@
 #!/usr/bin/env node
 
-import pg from "pg";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { loadConfig } from "./lib/config.js";
+import { DatabaseRegistry } from "./lib/database-registry.js";
 import { logger } from "./lib/logger.js";
-import { TransactionManager } from "./lib/transaction-manager.js";
 import { createServer } from "./server.js";
 
 export async function run(argv: string[] = process.argv.slice(2)): Promise<void> {
-  const config = loadConfig(process.env, argv);
-  const pool = new pg.Pool({
-    connectionString: config.postgres.databaseUrl,
-    max: config.postgres.maxConnections,
-    idleTimeoutMillis: config.postgres.idleTimeoutMs,
-    statement_timeout: config.postgres.statementTimeoutMs,
-  });
-  const transactionManager = new TransactionManager(
-    config.transactionTimeoutMs,
-    config.monitorIntervalMs,
-    config.enableTransactionMonitor,
-    logger,
-  );
+  const registry = new DatabaseRegistry({ args: argv, logger });
+  await registry.initialize();
 
-  process.once("SIGINT", async () => {
+  const shutdown = async () => {
     logger.info("Shutting down postgres-mcp-server");
-    transactionManager.stopMonitor();
-    await transactionManager.cleanupTransactions();
-    await pool.end();
+    await registry.shutdown();
     process.exit(0);
-  });
+  };
+  process.once("SIGINT", () => { void shutdown(); });
+  process.once("SIGTERM", () => { void shutdown(); });
 
-  pool.on("error", (error) => logger.error("Unexpected PostgreSQL idle client error", error));
-  logger.info(`${config.name} starting`);
-  transactionManager.startMonitor();
-  const server = createServer(config, { pool, transactionManager, logger });
+  const server = createServer({ name: "postgres-mcp-server", version: process.env.npm_package_version ?? "1.0.0" }, { registry, logger });
   await server.connect(new StdioServerTransport());
-  logger.info(`${config.name} ready`);
+  logger.info("postgres-mcp-server ready");
 }
 
-run().catch((error) => {
-  logger.error("Startup failed", error);
+run().catch(() => {
+  logger.error("Startup failed: check PostgreSQL configuration");
   process.exit(1);
 });

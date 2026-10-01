@@ -1,150 +1,70 @@
 # postgres-mcp-server
 
-Servidor MCP local para PostgreSQL. Está pensado para OpenCode y clientes MCP por **stdio**.
-
-Objetivo: consultar e inspeccionar bases PostgreSQL con seguridad. La escritura y el mantenimiento vienen apagados por defecto.
-
-## Seguridad rápida
-
-- `POSTGRES_ENABLE_WRITE=false` por defecto.
-- `POSTGRES_ENABLE_MAINTENANCE=false` por defecto.
-- Las consultas de lectura corren en `BEGIN TRANSACTION READ ONLY`.
-- La introspección usa parámetros (`$1`, `$2`), no concatena nombres enviados por el usuario.
-- Los logs van a `stderr`. `stdout` queda reservado para MCP.
-- Los errores no imprimen contraseñas ni URLs completas con credenciales.
+Servidor MCP **stdio** para varias bases PostgreSQL nombradas, con conexiones centralizadas en un archivo `.env`. OpenCode, Antigravity, Codex y Claude Code pueden usar el mismo archivo sin guardar URLs ni contraseñas en sus configuraciones. Lectura e introspección habilitadas; escritura y mantenimiento deshabilitados por defecto.
 
 ## Instalación
 
 ```powershell
 npm install
 npm run build
+Copy-Item .env.example .env
 ```
 
-## Configuración
+Editá `.env` y asigná una URL real a cada base que vayas a utilizar. El ejemplo incluye todas las opciones disponibles para cada base. El archivo `.env` real está ignorado por Git; guardalo con permisos de archivo adecuados.
 
-Variables principales:
+```dotenv
+POSTGRES_DB_PRODUCTION_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME
+POSTGRES_DB_PRODUCTION_DESCRIPTION=Produccion
+POSTGRES_DB_PRODUCTION_ENABLE_WRITE=false
+POSTGRES_DB_PRODUCTION_ENABLE_MAINTENANCE=false
+POSTGRES_DB_DEVELOPMENT_URL=postgresql://USER:PASSWORD@localhost:5432/dev
+POSTGRES_DB_DEVELOPMENT_ENABLE_WRITE=true
+```
 
-| Variable | Default | Uso |
-|---|---:|---|
-| `POSTGRES_URL` o `DATABASE_URL` | requerido | URL de conexión PostgreSQL. |
-| `POSTGRES_ENABLE_WRITE` | `false` | Habilita `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `COPY`. |
-| `POSTGRES_ENABLE_MAINTENANCE` | `false` | Habilita `DROP`, `TRUNCATE`, `ALTER`, `CREATE`, `VACUUM`, `ANALYZE`, `REINDEX`, `GRANT`, `REVOKE`. |
-| `PG_STATEMENT_TIMEOUT_MS` | `30000` | Tiempo máximo de sentencia. |
-| `PG_MAX_CONNECTIONS` | `10` | Máximo de conexiones del pool. |
-| `TRANSACTION_TIMEOUT_MS` | `60000` | Tiempo máximo de transacciones pendientes. |
-| `MAX_CONCURRENT_TRANSACTIONS` | `5` | Máximo de transacciones de escritura abiertas. |
-
-También podés pasar la URL como primer argumento del binario.
+El nombre de base es `PRODUCTION` o `DEVELOPMENT` en las herramientas MCP. Una instancia MCP ve todas las bases de **un** archivo; varias instancias pueden usar archivos distintos con `POSTGRES_ENV_PATH`. Sin esta variable se usa `.env` junto al proyecto, independientemente del directorio de trabajo. Si se indica una ruta y no existe, la instancia falla al arrancar. Para uso como paquete instalado fuera del proyecto, indicá la ruta explícitamente.
 
 ## OpenCode
 
-Ejemplo seguro, sin secretos reales:
-
 ```json
-"DB_ejemplo": {
+"postgres_trabajo": {
   "type": "local",
-  "command": [
-    "node",
-    "D:/work/postgres-mcp-server/dist/index.js"
-  ],
+  "command": ["node", "D:/work/postgres-mcp-server/dist/index.js"],
   "environment": {
-    "POSTGRES_URL": "postgresql://USER:PASSWORD@HOST:5432/DB_NAME",
-    "POSTGRES_ENABLE_WRITE": "false",
-    "POSTGRES_ENABLE_MAINTENANCE": "false",
-    "PG_STATEMENT_TIMEOUT_MS": "30000"
+    "POSTGRES_ENV_PATH": "D:/config/bases-trabajo.env"
   },
   "enabled": true,
   "timeout": 60000
 }
 ```
 
-Si usás paquete instalado:
+Para usar `.env` junto al proyecto, omití `environment`. Si usás el paquete instalado, usá `"command": ["npx", "-y", "postgres-mcp-server"]` y configurá `POSTGRES_ENV_PATH` con ruta absoluta. Otros arneses solo necesitan el comando stdio y esa variable de ruta.
 
-```json
-"command": ["npx", "-y", "postgres-mcp-server"]
-```
+## Herramientas
 
-## Tools MCP
+1. `list_databases`: devuelve nombres, descripciones y permisos sin URLs ni secretos; admite `limit` (1–50) y `offset` para paginar.
+2. `execute_query`: lectura en transacción `READ ONLY`; recibe `{ "database": "PRODUCTION", "sql": "SELECT now()" }`.
+3. `execute_dml_ddl_dcl_tcl`: escritura habilitada por base; devuelve `transaction_id` pendiente.
+4. `execute_commit` / `execute_rollback`: reciben `{ "database": "DEVELOPMENT", "transaction_id": "tx_..." }`.
+5. `execute_maintenance`: mantenimiento si está habilitado por base; recibe `database` y `sql`.
+6. `list_schemas`, `list_tables`, `describe_table`: introspección; reciben `database` y, cuando corresponde, `schema_name`/`table_name`.
 
-### `execute_query`
+Cada invocación lee nuevamente el archivo; si cambian una URL, un permiso o un límite, se rotan las conexiones afectadas. Se dejan terminar las operaciones iniciadas, se revierten las transacciones que quedaron pendientes y se cierran los pools anteriores antes de habilitar nuevas operaciones. Un archivo inválido, inaccesible o eliminado revoca el acceso hasta corregirlo. Para editar sin interrupciones, reemplazá el archivo de forma atómica.
 
-Ejecuta SQL de lectura: `SELECT`, `WITH`, `EXPLAIN`, `SHOW`.
+## Seguridad
 
-Entrada:
-
-```json
-{ "sql": "SELECT now()" }
-```
-
-### `execute_dml_ddl_dcl_tcl`
-
-Ejecuta escritura solo si `POSTGRES_ENABLE_WRITE=true`. Deja la transacción abierta y devuelve `transaction_id`.
-
-Entrada:
-
-```json
-{ "sql": "UPDATE users SET active = true WHERE id = 1" }
-```
-
-Después llamá a `execute_commit` o `execute_rollback`.
-
-### `execute_commit`
-
-Confirma una transacción pendiente.
-
-```json
-{ "transaction_id": "tx_..." }
-```
-
-### `execute_rollback`
-
-Revierte una transacción pendiente.
-
-```json
-{ "transaction_id": "tx_..." }
-```
-
-### `execute_maintenance`
-
-Ejecuta mantenimiento solo si `POSTGRES_ENABLE_MAINTENANCE=true`.
-
-### `list_schemas`
-
-Lista esquemas no internos visibles para el usuario conectado.
-
-### `list_tables`
-
-Lista tablas. Acepta filtro opcional:
-
-```json
-{ "schema_name": "public" }
-```
-
-### `describe_table`
-
-Describe columnas, índices y constraints.
-
-```json
-{ "schema_name": "public", "table_name": "users" }
-```
+- Escritura y mantenimiento se habilitan explícitamente por base; ambos permisos son `false` por defecto.
+- La lectura corre en `BEGIN TRANSACTION READ ONLY` y la introspección parametriza sus consultas.
+- Los logs van a `stderr`; `stdout` queda reservado para el protocolo MCP.
+- Una transacción iniciada antes de una recarga no puede confirmarse después de ella: se revierte al retirar el pool.
 
 ## Desarrollo
 
 ```powershell
 npm ci
 npm run build
-npm test -- --run --coverage
 npm run lint
+npm test
+npm run coverage
 ```
 
-Los tests usan fakes/mocks. No necesitan una base PostgreSQL real.
-
-## CI
-
-GitHub Actions ejecuta Node 20 y 22 con cache npm, build, lint y coverage. El mínimo es 85% en líneas, funciones, ramas y statements.
-
-## Más documentación
-
-- `docs/configuracion.md`
-- `docs/seguridad-sql.md`
-- `docs/desarrollo.md`
+Las pruebas usan pools simulados. Más detalles: `docs/configuracion.md`, `docs/seguridad-sql.md` y `docs/desarrollo.md`.

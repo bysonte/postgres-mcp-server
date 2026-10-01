@@ -1,7 +1,7 @@
 {
   "name": "postgres-mcp-server",
   "version": "1.0.0",
-  "description": "Servidor MCP propio para PostgreSQL con lectura segura, escritura opcional e introspección parametrizada",
+  "description": "Servidor MCP para varias bases PostgreSQL con configuración centralizada, lectura segura y escritura opcional",
   "license": "MIT",
   "author": "gentleman-programming",
   "homepage": "https://github.com/gentleman-programming/postgres-mcp-server",
@@ -17,7 +17,8 @@
     "postgres-mcp-server": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    ".env.example"
   ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/index.js",
@@ -46,6 +47,7 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
+    "dotenv": "18.0.4",
     "pg": "^8.16.3",
     "zod": "^3.25.76"
   },

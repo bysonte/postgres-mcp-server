@@ -2,7 +2,7 @@ import type pg from "pg";
 import { SQL_KIND, type SqlPolicy, type ToolResponse } from "./types.js";
 import { jsonResponse, errorResponse } from "./mcp-response.js";
 import { validateSql } from "./sql-validation.js";
-import { generateTransactionId, safelyReleaseClient, safeErrorMessage } from "./utils.js";
+import { generateTransactionId, safelyReleaseClient } from "./utils.js";
 import { TransactionManager } from "./transaction-manager.js";
 
 export interface QueryOptions {
@@ -100,44 +100,19 @@ export async function executeMaintenanceQuery(pool: pg.Pool, sql: string, policy
 }
 
 export async function commitTransaction(transactionManager: TransactionManager, transactionId: string): Promise<ToolResponse> {
-  const transaction = transactionManager.getTransaction(transactionId);
-  if (!transaction || transaction.released) {
-    transactionManager.removeTransaction(transactionId);
-    return errorResponse("Transaction not found or already closed");
-  }
-
   try {
-    await transaction.client.query("COMMIT");
+    if (!await transactionManager.terminate(transactionId, "COMMIT")) return errorResponse("Transaction not found or already closed");
     return jsonResponse({ status: "committed", transaction_id: transactionId });
   } catch (error) {
-    try {
-      await transaction.client.query("ROLLBACK");
-    } catch {
-      // Ignore rollback failure.
-    }
-    return errorResponse(`Commit failed: ${safeErrorMessage(error)}`);
-  } finally {
-    transaction.released = true;
-    safelyReleaseClient(transaction.client);
-    transactionManager.removeTransaction(transactionId);
+    return errorResponse(error, "Commit failed");
   }
 }
 
 export async function rollbackTransaction(transactionManager: TransactionManager, transactionId: string): Promise<ToolResponse> {
-  const transaction = transactionManager.getTransaction(transactionId);
-  if (!transaction || transaction.released) {
-    transactionManager.removeTransaction(transactionId);
-    return errorResponse("Transaction not found or already closed");
-  }
-
   try {
-    await transaction.client.query("ROLLBACK");
+    if (!await transactionManager.terminate(transactionId, "ROLLBACK")) return errorResponse("Transaction not found or already closed");
     return jsonResponse({ status: "rolled_back", transaction_id: transactionId });
   } catch (error) {
-    return errorResponse(`Rollback failed: ${safeErrorMessage(error)}`);
-  } finally {
-    transaction.released = true;
-    safelyReleaseClient(transaction.client);
-    transactionManager.removeTransaction(transactionId);
+    return errorResponse(error, "Rollback failed");
   }
 }

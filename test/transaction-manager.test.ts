@@ -53,4 +53,23 @@ describe("transaction-manager", () => {
     manager.stopMonitor();
     vi.useRealTimers();
   });
+
+  it("cleanup espera un commit en curso sin enviar rollback concurrente ni liberar dos veces", async () => {
+    const manager = new TransactionManager(1000, 1000, false, silentLogger);
+    const client = new FakeClient();
+    let resume!: () => void;
+    const originalQuery = client.query.bind(client);
+    client.query = async (text, params) => {
+      if (text === "COMMIT") await new Promise<void>((resolve) => { resume = resolve; });
+      return originalQuery(text, params);
+    };
+    manager.addTransaction("tx", asClient(client), "INSERT");
+    const commit = manager.terminate("tx", "COMMIT");
+    const cleanup = manager.cleanupTransactions();
+    expect(await manager.terminate("tx", "ROLLBACK")).toBe(false);
+    resume();
+    await Promise.all([commit, cleanup]);
+    expect(client.calls.map((call) => call.text)).toEqual(["COMMIT"]);
+    expect(client.released).toBe(true);
+  });
 });
