@@ -39,6 +39,10 @@ El nombre de base es `PRODUCTION` o `DEVELOPMENT` en las herramientas MCP. Una i
 
 Para usar `.env` junto al proyecto, omití `environment`. Si usás el paquete instalado, usá `"command": ["npx", "-y", "postgres-mcp-server"]` y configurá `POSTGRES_ENV_PATH` con ruta absoluta. Otros arneses solo necesitan el comando stdio y esa variable de ruta.
 
+### Acceso por túnel SSH
+
+El lanzador opcional `scripts/start-with-ssh.mjs` inicia el MCP sin esperar SSH y abre el túnel solo al usar las bases de Seven Village. Un fallo del túnel no bloquea las demás bases ni cambia sus permisos. Consultá [la configuración y las comprobaciones](docs/ssh-tunnel.md).
+
 ## Herramientas
 
 1. `list_databases`: devuelve nombres, descripciones y permisos sin URLs ni secretos; admite `limit` (1–50) y `offset` para paginar.

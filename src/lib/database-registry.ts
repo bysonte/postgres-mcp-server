@@ -34,6 +34,7 @@ export interface RegistryOptions {
   args?: string[];
   poolFactory?: (config: AppConfig) => pg.Pool;
   logger?: Logger;
+  beforeDatabase?: (name: string) => Promise<void>;
 }
 
 /** Re-read on every tool call. A change revokes the old snapshot before any new work is admitted. */
@@ -44,6 +45,7 @@ export class DatabaseRegistry {
   private readonly args: string[];
   private readonly poolFactory: (config: AppConfig) => pg.Pool;
   private readonly log: Logger;
+  private readonly beforeDatabase: RegistryOptions["beforeDatabase"];
   private active = new Map<string, Connection>();
   private fingerprint: string | undefined;
   private fileWasPresent = false;
@@ -57,6 +59,7 @@ export class DatabaseRegistry {
     this.explicitPath = options.envPath !== undefined || this.env.POSTGRES_ENV_PATH !== undefined;
     this.envPath = options.envPath ?? this.env.POSTGRES_ENV_PATH ?? DEFAULT_ENV_PATH;
     this.log = options.logger ?? defaultLogger;
+    this.beforeDatabase = options.beforeDatabase;
     this.poolFactory = options.poolFactory ?? ((config) => new pg.Pool({
       connectionString: config.postgres.databaseUrl,
       max: config.postgres.maxConnections,
@@ -174,6 +177,8 @@ export class DatabaseRegistry {
       return found;
     });
     try {
+      // Connection preparation must never hold the shared registry queue.
+      await this.beforeDatabase?.(name);
       return await action({ config: connection.definition.config, pool: connection.pool, transactions: connection.transactions });
     } finally {
       connection.running--;

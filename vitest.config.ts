@@ -7,7 +7,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
-      include: ["src/**/*.ts"],
+      include: ["src/**/*.ts", "scripts/ssh-launcher.mjs", "scripts/shared-tunnel.mjs", "scripts/lazy-tunnel.mjs"],
       exclude: ["src/index.ts", "src/server.ts"],
       thresholds: {
         lines: 85,

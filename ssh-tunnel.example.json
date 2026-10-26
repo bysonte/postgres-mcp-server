@@ -1,0 +1,7 @@
+{
+  "host": "your-vps.example.com",
+  "user": "your-ssh-user",
+  "sshPort": 22,
+  "localPort": 15432,
+  "remotePort": 5432
+}

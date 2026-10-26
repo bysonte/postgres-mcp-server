@@ -18,6 +18,9 @@
   },
   "files": [
     "dist",
+    "scripts/*.mjs",
+    "ssh-tunnel.example.json",
+    "docs/ssh-tunnel.md",
     ".env.example"
   ],
   "scripts": {
@@ -27,6 +30,7 @@
     "coverage": "vitest run --coverage",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
+    "start:ssh": "node scripts/start-with-ssh.mjs",
     "prepare": "npm run build"
   },
   "keywords": [
